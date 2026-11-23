@@ -101,12 +101,57 @@
       min-height: 16px;
     }
     .ts-status.error { color: var(--red); }
+
+    /* ---------- Portrait / Landscape layout toggle ---------- */
+    .ts-layout-toggle {
+      display: inline-flex;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .ts-layout-btn {
+      font-size: 12px;
+      color: var(--ink);
+      background: #fff;
+      border: 0;
+      padding: 4px 10px;
+      cursor: pointer;
+    }
+    .ts-layout-btn + .ts-layout-btn { border-left: 1px solid var(--line); }
+    .ts-layout-btn:hover { background: #f1efe6; }
+    .ts-layout-btn[aria-pressed="true"] {
+      background: var(--ink);
+      color: #fff;
+    }
+
+    .ts-charts { display: block; }
+
+    /* Portrait (phone): one narrow column, taller charts */
+    #ts-dashboard-root.ts-portrait { max-width: 520px; }
+    #ts-dashboard-root.ts-portrait .ts-chart-wrap { height: 300px; }
+
+    /* Landscape (laptop): wide page, charts side by side where they fit */
+    #ts-dashboard-root.ts-landscape { max-width: 1400px; }
+    #ts-dashboard-root.ts-landscape .ts-charts {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 0 22px;
+    }
+    #ts-dashboard-root.ts-landscape .ts-chart-wrap { height: 280px; }
+
+    @media (max-width: 520px) {
+      #ts-dashboard-root { padding: 12px 10px 16px; }
+    }
   </style>
 
   <div class="ts-header">
     <div class="ts-title">Weather Station – 3 Day Comparison</div>
     <div class="ts-sub">
       <span id="ts-last-updated">Loading…</span>
+      <span class="ts-layout-toggle" role="group" aria-label="Layout">
+        <button class="ts-layout-btn" id="ts-btn-portrait" aria-pressed="false">Portrait</button>
+        <button class="ts-layout-btn" id="ts-btn-landscape" aria-pressed="false">Landscape</button>
+      </span>
       <button class="ts-refresh-btn" id="ts-refresh-btn">Refresh now</button>
     </div>
   </div>
@@ -117,6 +162,7 @@
     <span><i class="ts-swatch" style="background:#b83b3b"></i>Today</span>
   </div>
 
+  <div class="ts-charts">
   <div class="ts-chart-block">
     <div class="ts-chart-title">Temperature (°C)</div>
     <div class="ts-chart-wrap"><canvas id="ts-chart-temperature"></canvas></div>
@@ -131,6 +177,8 @@
     <div class="ts-chart-title">Humidity (%)</div>
     <div class="ts-chart-wrap"><canvas id="ts-chart-humidity"></canvas></div>
   </div>
+
+  </div><!-- /.ts-charts -->
 
   <div class="ts-status" id="ts-status"></div>
 </div>
@@ -459,6 +507,40 @@
   }
 
   document.getElementById("ts-refresh-btn").addEventListener("click", fetchAndRender);
+
+  // ===================== PORTRAIT / LANDSCAPE TOGGLE =====================
+  var LAYOUT_KEY = "ts-layout";
+  var rootEl = document.getElementById("ts-dashboard-root");
+  var btnPortrait = document.getElementById("ts-btn-portrait");
+  var btnLandscape = document.getElementById("ts-btn-landscape");
+
+  function applyLayout(mode, remember) {
+    var landscape = (mode === "landscape");
+    rootEl.classList.toggle("ts-landscape", landscape);
+    rootEl.classList.toggle("ts-portrait", !landscape);
+    btnLandscape.setAttribute("aria-pressed", landscape ? "true" : "false");
+    btnPortrait.setAttribute("aria-pressed", landscape ? "false" : "true");
+
+    if (remember) {
+      try { localStorage.setItem(LAYOUT_KEY, mode); } catch (e) { /* storage blocked - fine */ }
+    }
+    // Let the browser re-flow, then tell each chart to re-measure itself.
+    setTimeout(function () {
+      Object.keys(charts).forEach(function (k) { charts[k].resize(); });
+    }, 50);
+  }
+
+  function initialLayout() {
+    var saved = null;
+    try { saved = localStorage.getItem(LAYOUT_KEY); } catch (e) { /* ignore */ }
+    if (saved === "portrait" || saved === "landscape") return saved;
+    // First visit: narrow screens (phones) start in portrait, wider in landscape.
+    return window.innerWidth < 700 ? "portrait" : "landscape";
+  }
+
+  btnPortrait.addEventListener("click", function () { applyLayout("portrait", true); });
+  btnLandscape.addEventListener("click", function () { applyLayout("landscape", true); });
+  applyLayout(initialLayout(), false);
 
   fetchAndRender();
   setInterval(fetchAndRender, REFRESH_MS);
