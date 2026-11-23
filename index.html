@@ -127,8 +127,18 @@
     .ts-charts { display: block; }
 
     /* Portrait (phone): one narrow column, taller charts */
-    #ts-dashboard-root.ts-portrait { max-width: 520px; }
-    #ts-dashboard-root.ts-portrait .ts-chart-wrap { height: 300px; }
+    /* Everything is scaled up so it stays readable on a small screen and
+       the page uses the full width available. */
+    #ts-dashboard-root.ts-portrait { max-width: none; width: 100%; padding: 16px 14px 20px; }
+    #ts-dashboard-root.ts-portrait .ts-title { font-size: 26px; }
+    #ts-dashboard-root.ts-portrait .ts-sub { font-size: 16px; flex-wrap: wrap; gap: 10px; }
+    #ts-dashboard-root.ts-portrait .ts-layout-btn,
+    #ts-dashboard-root.ts-portrait .ts-refresh-btn { font-size: 16px; padding: 8px 14px; }
+    #ts-dashboard-root.ts-portrait .ts-legend { font-size: 17px; gap: 20px; margin: 14px 0 6px; }
+    #ts-dashboard-root.ts-portrait .ts-swatch { width: 20px; height: 4px; }
+    #ts-dashboard-root.ts-portrait .ts-chart-title { font-size: 21px; margin-bottom: 8px; }
+    #ts-dashboard-root.ts-portrait .ts-chart-wrap { height: 380px; }
+    #ts-dashboard-root.ts-portrait .ts-status { font-size: 15px; }
 
     /* Landscape (laptop): wide page, charts side by side where they fit */
     #ts-dashboard-root.ts-landscape { max-width: 1400px; }
@@ -226,6 +236,11 @@
   };
 
   var charts = {}; // canvasId -> Chart.js instance
+  var currentLayout = "landscape"; // set by the Portrait/Landscape toggle
+
+  // Axis label size and line thickness depend on the layout (bigger on phones).
+  function tickFontSize() { return currentLayout === "portrait" ? 16 : 12; }
+  function lineWidth() { return currentLayout === "portrait" ? 3.5 : 2; }
 
   // ===================== HELPERS =====================
 
@@ -393,7 +408,7 @@
       { label: "Today", data: seriesData.today, borderColor: COLORS.today, backgroundColor: COLORS.today }
     ].map(function (ds) {
       return Object.assign(ds, {
-        borderWidth: 2,
+        borderWidth: lineWidth(),
         pointRadius: 0,
         pointHoverRadius: 3,
         spanGaps: true,
@@ -409,6 +424,8 @@
       charts[fieldName].options.scales.y.afterBuildTicks = function (axis) {
         axis.ticks = yTicks.map(function (v) { return { value: v }; });
       };
+      charts[fieldName].options.scales.x.ticks.font = { size: tickFontSize() };
+      charts[fieldName].options.scales.y.ticks.font = { size: tickFontSize() };
       charts[fieldName].update();
       return;
     }
@@ -433,7 +450,7 @@
         scales: {
           x: {
             grid: { color: "#eae7db" },
-            ticks: { color: "#6b7268" },
+            ticks: { color: "#6b7268", font: { size: tickFontSize() } },
             afterBuildTicks: function (axis) {
               axis.ticks = X_AXIS_TICKS.map(function (t) {
                 return { value: t.value, label: t.label };
@@ -444,7 +461,7 @@
             min: yRange.min,
             max: yRange.max,
             grid: { color: "#eae7db" },
-            ticks: { color: "#6b7268" },
+            ticks: { color: "#6b7268", font: { size: tickFontSize() } },
             afterBuildTicks: function (axis) {
               axis.ticks = yTicks.map(function (v) { return { value: v }; });
             }
@@ -524,6 +541,17 @@
     if (remember) {
       try { localStorage.setItem(LAYOUT_KEY, mode); } catch (e) { /* storage blocked - fine */ }
     }
+    currentLayout = landscape ? "landscape" : "portrait";
+
+    // Re-size axis labels and line thickness on any charts already drawn.
+    Object.keys(charts).forEach(function (k) {
+      var c = charts[k];
+      c.options.scales.x.ticks.font = { size: tickFontSize() };
+      c.options.scales.y.ticks.font = { size: tickFontSize() };
+      c.data.datasets.forEach(function (ds) { ds.borderWidth = lineWidth(); });
+      c.update();
+    });
+
     // Let the browser re-flow, then tell each chart to re-measure itself.
     setTimeout(function () {
       Object.keys(charts).forEach(function (k) { charts[k].resize(); });
